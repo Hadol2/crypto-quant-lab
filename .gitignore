@@ -1,21 +1,21 @@
-# 환경 변수 및 민감 정보
-.env
-
-# 로컬 자산 및 로그 파일
-total_asset.json
-risk_log.csv
-paper_trade_log.csv
-saved_positions.json
-
-# Python 일반 무시 항목
+# Allowlist: only the public parts of the lab are tracked.
+# Strategy code (research/, catalog/, bentley/, cayenne/), data, ledgers and host/server details stay local.
+/*
+!/.gitignore
+!/README.md
+!/requirements.txt
+!/arena/
+!/results/
+!/automation/
+/arena/state/
+/results/*
+!/results/__init__.py
+!/results/ledger.py
 __pycache__/
 *.pyc
-*.pyo
-*.pyd
-.Python
-env/
-venv/
-
-# Streamlit secrets
-.streamlit/secrets.toml
 .DS_Store
+._*
+.env*
+*.sqlite
+*.pkl
+*.jsonl

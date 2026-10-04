@@ -1,0 +1,414 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Arena Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root {
+  color-scheme: light;
+  --page: #f9f9f7; --surface: #fcfcfb; --ink: #0b0b0b; --ink2: #52514e; --muted: #898781;
+  --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11,11,11,0.10); --wash: rgba(11,11,11,0.04);
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100;
+  --band: rgba(42,120,214,0.16); --gain: #2a78d6; --loss: #e34948; --mid: #c3c2b7;
+  --good: #006300; --bad: #d03b3b; --warn: #fab219;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --page: #0d0d0d; --surface: #1a1a19; --ink: #ffffff; --ink2: #c3c2b7; --muted: #898781;
+    --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10); --wash: rgba(255,255,255,0.05);
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
+    --band: rgba(57,135,229,0.22); --gain: #3987e5; --loss: #e66767; --mid: #383835;
+    --good: #0ca30c; --bad: #e66767;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #0d0d0d; --surface: #1a1a19; --ink: #ffffff; --ink2: #c3c2b7; --muted: #898781;
+  --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10); --wash: rgba(255,255,255,0.05);
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
+  --band: rgba(57,135,229,0.22); --gain: #3987e5; --loss: #e66767; --mid: #383835;
+  --good: #0ca30c; --bad: #e66767;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--page); color: var(--ink); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+main { max-width: 1280px; margin: 0 auto; padding: 20px 16px 48px; }
+header { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; margin-bottom: 14px; }
+h1 { font-size: 20px; margin: 0; }
+h2 { font-size: 15px; margin: 0 0 10px; }
+.sub { color: var(--ink2); font-size: 13px; }
+.muted { color: var(--muted); }
+.spacer { flex: 1; }
+select, input, button { font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 5px 8px; }
+button { cursor: pointer; }
+.pill { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; padding: 2px 8px; border-radius: 99px; border: 1px solid var(--border); }
+.dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
+.grid { display: grid; gap: 12px; }
+.grid > * { min-width: 0; }
+.kpis { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); margin: 12px 0; }
+.kpi .v { font-size: 22px; font-weight: 600; margin-top: 2px; }
+.kpi .l { font-size: 12px; color: var(--ink2); }
+.kpi .d { font-size: 12px; color: var(--muted); }
+.two { grid-template-columns: 1fr 1fr; }
+@media (max-width: 860px) { .two { grid-template-columns: 1fr; } }
+.chart { position: relative; height: 280px; }
+.progress { position: relative; height: 10px; background: var(--wash); border-radius: 99px; overflow: hidden; margin: 8px 0 4px; }
+.progress > .fill { position: absolute; inset: 0 auto 0 0; background: var(--s1); border-radius: 99px; }
+.progress > .tick { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--surface); }
+.plabels { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); }
+.tablewrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th, td { padding: 6px 8px; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--grid); font-variant-numeric: tabular-nums; }
+th { color: var(--ink2); font-weight: 600; position: sticky; top: 0; background: var(--surface); }
+th.s { cursor: pointer; user-select: none; }
+th.s:hover { color: var(--ink); }
+td.l, th.l { text-align: left; }
+tbody tr:hover { background: var(--wash); }
+tbody tr.sel { background: var(--wash); outline: 1px solid var(--axis); }
+tr.click { cursor: pointer; }
+.pos { color: var(--good); } .neg { color: var(--bad); }
+.filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; align-items: center; }
+.scroll { max-height: 520px; overflow: auto; }
+.legend { display: flex; flex-wrap: wrap; gap: 12px; font-size: 12px; color: var(--ink2); margin-bottom: 6px; }
+.legend span { display: inline-flex; align-items: center; gap: 5px; }
+.sw { width: 12px; height: 3px; border-radius: 2px; display: inline-block; }
+.swb { width: 12px; height: 10px; border-radius: 2px; display: inline-block; }
+.note { font-size: 12px; color: var(--ink2); border-left: 3px solid var(--axis); padding: 6px 10px; margin-top: 16px; }
+.warnbox { border: 1px solid var(--warn); border-radius: 8px; padding: 8px 12px; margin: 8px 0; font-size: 13px; display: none; }
+#detail { display: none; margin-top: 12px; }
+code { font-size: 12px; color: var(--ink2); word-break: break-all; white-space: normal; }
+section { margin-top: 12px; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div>
+      <h1>Bot Arena</h1>
+      <div class="sub">Binance USD-M live paper trading · 5분마다 갱신</div>
+    </div>
+    <span id="status" class="pill"></span>
+    <div class="spacer"></div>
+    <label class="sub">Run <select id="runsel"></select></label>
+    <button id="theme" title="Toggle light/dark">◐</button>
+    <div class="sub" id="clock"></div>
+  </header>
+
+  <div id="stale" class="warnbox">⚠ <span></span></div>
+
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px">
+      <b id="cyclelabel"></b><span class="sub" id="lasttick"></span>
+    </div>
+    <div class="progress" id="progress"></div>
+    <div class="plabels" id="plabels"></div>
+  </div>
+
+  <div class="grid kpis" id="kpis"></div>
+
+  <div class="grid two">
+    <div class="card">
+      <h2>Population return (all live bots)</h2>
+      <div class="legend">
+        <span><i class="sw" style="background:var(--s1)"></i>Median</span>
+        <span><i class="swb" style="background:var(--band)"></i>p10–p90</span>
+        <span><i class="sw" style="background:var(--ink2)"></i>Mean (dashed)</span>
+        <span class="muted">Vertical lines = cycle boundaries</span>
+      </div>
+      <div class="chart"><canvas id="popChart"></canvas></div>
+    </div>
+    <div class="card">
+      <h2>Mean return by strategy family</h2>
+      <div class="legend" id="famLegend"></div>
+      <div class="chart"><canvas id="famChart"></canvas></div>
+    </div>
+  </div>
+
+  <div class="grid two" style="margin-top:12px">
+    <div class="card">
+      <h2>Current return distribution <span class="muted" id="histn"></span></h2>
+      <div class="legend">
+        <span><i class="swb" style="background:var(--loss)"></i>Loss</span>
+        <span><i class="swb" style="background:var(--mid)"></i>About 0 (idle)</span>
+        <span><i class="swb" style="background:var(--gain)"></i>Gain</span>
+      </div>
+      <div class="chart"><canvas id="histChart"></canvas></div>
+    </div>
+    <div class="card">
+      <h2>Family × timeframe (live bots)</h2>
+      <div class="tablewrap"><table id="famtf"></table></div>
+    </div>
+  </div>
+
+  <section class="card">
+    <h2>Leaderboard</h2>
+    <div class="filters">
+      <select id="fStatus"><option value="live">Live</option><option value="retired">Retired</option><option value="all">All</option></select>
+      <select id="fFam"><option value="">All families</option></select>
+      <select id="fTf"><option value="">All timeframes</option></select>
+      <input id="fQ" placeholder="bot id / params search" size="22">
+      <span class="sub" id="lbcount"></span>
+    </div>
+    <div class="scroll tablewrap"><table id="lb"></table></div>
+    <div id="detail">
+      <h2 id="dtitle"></h2>
+      <div class="sub"><code id="dparams"></code></div>
+      <div class="chart" style="height:220px;margin-top:8px"><canvas id="botChart"></canvas></div>
+    </div>
+  </section>
+
+  <div class="grid two" style="margin-top:12px">
+    <div class="card">
+      <h2>Cycle results (selection)</h2>
+      <div class="tablewrap"><table id="cycles"></table></div>
+      <div class="sub" id="nocycle"></div>
+    </div>
+    <div class="card">
+      <h2>Replay gate pass rate</h2>
+      <div class="tablewrap"><table id="trials"></table></div>
+      <div class="sub" style="margin-top:8px">Gate: pre-holdout replay, trades ≥ 20 · 0 liquidations · no DD kill · Sharpe &gt; 0</div>
+    </div>
+  </div>
+
+  <div class="note">
+    Scoring: cycle score = return − 2 × MDD, lifetime L = Σscore / (cycles + 2). Retire rule: DD kill or liquidation, or bottom 30% with L &lt; 0 after 2+ cycles.
+    Equity includes unrealized P&amp;L (closed-bar marks). Rankings over a few cycles are mostly luck; no bot from a 1–3 day run qualifies for real money.
+  </div>
+</main>
+
+<script>
+const $ = s => document.querySelector(s);
+const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const FAMS = ["breakout", "ema", "meanrev", "momentum"];   // fixed order -> fixed colour
+const famColor = f => css("--s" + (FAMS.indexOf(f) + 1));
+const pct = (x, d = 2) => x == null ? "–" : (x >= 0 ? "+" : "") + (x * 100).toFixed(d) + "%";
+const money = x => x == null ? "–" : "$" + x.toLocaleString("en-US", {maximumFractionDigits: 0});
+const kst = ms => new Date(ms + 9 * 3600e3).toISOString().slice(5, 16).replace("T", " ");
+const utc = ms => new Date(ms).toISOString().slice(5, 16).replace("T", " ");
+const hm = ms => new Date(ms + 9 * 3600e3).toISOString().slice(11, 16);
+const cls = x => x > 0 ? "pos" : x < 0 ? "neg" : "";
+let S = null, charts = {}, sortKey = "ret", sortDir = -1, selBot = null, runId = null;
+
+function applyTheme() {
+  try { const t = localStorage.getItem("arena-theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}
+}
+applyTheme();
+$("#theme").onclick = () => {
+  const dark = document.documentElement.dataset.theme ? document.documentElement.dataset.theme === "dark"
+    : matchMedia("(prefers-color-scheme: dark)").matches;
+  document.documentElement.dataset.theme = dark ? "light" : "dark";
+  try { localStorage.setItem("arena-theme", document.documentElement.dataset.theme); } catch (e) {}
+  render();
+};
+
+function tick() {
+  const n = Date.now();
+  $("#clock").textContent = `KST ${kst(n)} · UTC ${utc(n)}`;
+}
+setInterval(tick, 1000); tick();
+
+async function load() {
+  const r = await fetch("/api/state" + (runId ? "?run=" + encodeURIComponent(runId) : ""));
+  S = await r.json();
+  if (!S.run) { document.querySelector("main").innerHTML = "<p>No arena runs yet.</p>"; return; }
+  runId = S.run.run_id;
+  render();
+}
+
+function baseOpts(yfmt) {
+  const ink2 = css("--ink2"), grid = css("--grid"), muted = css("--muted");
+  return {
+    responsive: true, maintainAspectRatio: false, animation: false,
+    interaction: {mode: "index", intersect: false},
+    layout: {padding: {right: 70}},
+    scales: {
+      x: {type: "linear", grid: {display: false}, border: {color: css("--axis")},
+          ticks: {color: muted, callback: v => hm(v)},
+          afterBuildTicks: ax => { if (!S) return; const t = [];
+            for (let v = S.run.started_ms; v <= S.run.end_ms; v += S.run.cycle_ms) t.push({value: v});
+            if (t[t.length - 1].value !== S.run.end_ms) t.push({value: S.run.end_ms}); ax.ticks = t; }},
+      y: {grid: {color: grid}, border: {display: false}, ticks: {color: muted, maxTicksLimit: 6, callback: yfmt}},
+    },
+    plugins: {legend: {display: false},
+      tooltip: {backgroundColor: css("--surface"), titleColor: css("--ink"), bodyColor: ink2, borderColor: css("--border"),
+                borderWidth: 1, padding: 10, boxPadding: 4, usePointStyle: true}},
+  };
+}
+
+// cycle boundary rules + end-of-line direct labels
+const cycleLines = {id: "cycleLines", beforeDatasetsDraw(c) {
+  if (!S) return; const x = c.scales.x, a = c.chartArea, g = c.ctx;
+  g.save(); g.strokeStyle = css("--axis"); g.setLineDash([3, 3]); g.lineWidth = 1;
+  for (let t = S.run.started_ms + S.run.cycle_ms; t < S.run.end_ms; t += S.run.cycle_ms) {
+    const px = x.getPixelForValue(t); if (px < a.left || px > a.right) continue;
+    g.beginPath(); g.moveTo(px, a.top); g.lineTo(px, a.bottom); g.stroke();
+  }
+  g.restore();
+}};
+const endLabels = {id: "endLabels", afterDatasetsDraw(c) {
+  const g = c.ctx; g.save(); g.font = "12px system-ui, sans-serif"; g.textBaseline = "middle";
+  const placed = [];
+  c.data.datasets.forEach((ds, i) => {
+    if (!ds.endLabel) return; const meta = c.getDatasetMeta(i); if (meta.hidden) return;
+    const pts = meta.data.filter((p, j) => ds.data[j] && ds.data[j].y != null); const p = pts[pts.length - 1]; if (!p) return;
+    let y = p.y; while (placed.some(q => Math.abs(q - y) < 13)) y += 13; placed.push(y);
+    g.fillStyle = ds.borderColor; g.beginPath(); g.arc(p.x + 8, y, 3.5, 0, 7); g.fill();
+    g.fillStyle = css("--ink2"); g.fillText(ds.endLabel, p.x + 15, y);
+  });
+  g.restore();
+}};
+
+function mk(id, cfg) {
+  if (charts[id]) charts[id].destroy();
+  charts[id] = new Chart(document.getElementById(id), cfg);
+}
+
+function render() {
+  const run = S.run, now = S.now_ms, ser = S.series;
+  // header
+  const sel = $("#runsel"); sel.innerHTML = S.runs.map(r => `<option ${r.run_id === run.run_id ? "selected" : ""}>${r.run_id}</option>`).join("");
+  sel.onchange = () => { runId = sel.value; selBot = null; load(); };
+  const running = run.status === "running";
+  $("#status").innerHTML = `<i class="dot" style="background:${running ? css("--good") : css("--muted")}"></i>${running ? "Running" : "Finished"}`;
+
+  const ncyc = Math.ceil((run.end_ms - run.started_ms) / run.cycle_ms);
+  const done = S.cycles.length;
+  const cur = Math.min(Math.floor((Math.min(now, run.end_ms) - run.started_ms) / run.cycle_ms), ncyc - 1);
+  const c0 = run.started_ms + cur * run.cycle_ms, c1 = Math.min(c0 + run.cycle_ms, run.end_ms);
+  const prog = Math.max(0, Math.min(1, (now - run.started_ms) / (run.end_ms - run.started_ms)));
+  $("#cyclelabel").textContent = running
+    ? `Cycle ${cur + 1}/${ncyc} in progress (${hm(c0)}–${hm(c1)} KST) · next cull in ${Math.max(0, Math.round((c1 - now) / 60000))} min`
+    : `${done} cycles completed`;
+  let bar = `<div class="fill" style="width:${prog * 100}%"></div>`;
+  for (let k = 1; k < ncyc; k++) bar += `<div class="tick" style="left:${k / ncyc * 100}%"></div>`;
+  $("#progress").innerHTML = bar;
+  $("#plabels").innerHTML = `<span>Start ${kst(run.started_ms)} KST</span><span>${(prog * 100).toFixed(0)}%</span><span>End ${kst(run.end_ms)} KST</span>`;
+  $("#lasttick").textContent = S.latest_t ? `Latest snapshot ${kst(S.latest_t)} KST (${utc(S.latest_t)} UTC)` : "No snapshots yet";
+  const stale = running && S.latest_t && now - S.latest_t > 15 * 60e3;
+  $("#stale").style.display = stale ? "block" : "none";
+  if (stale) $("#stale span").textContent = `Last snapshot was ${Math.round((now - S.latest_t) / 60000)} min ago. The runner may be down.`;
+
+  // KPIs
+  const live = S.bots.filter(b => b.live), last = ser[ser.length - 1];
+  const best = live.slice().sort((a, b) => b.ret - a.ret)[0], worst = live.slice().sort((a, b) => a.ret - b.ret)[0];
+  const retired = S.bots.filter(b => b.retired_ms);
+  const trades = live.reduce((a, b) => a + (b.trades || 0), 0);
+  const kp = [
+    ["Live bots", live.length, `${S.bots.length} ever · ${retired.length} retired`],
+    ["Mean return", last ? pct(last.mean / 1e4 - 1, 3) : "–", last ? `Median ${pct(last.median / 1e4 - 1, 3)}` : ""],
+    ["Winning / losing", last ? `${last.up} / ${last.down}` : "–", last ? `${last.n - last.up - last.down} flat` : ""],
+    ["Best bot", best ? pct(best.ret) : "–", best ? `${best.bot} · ${best.family}/${best.tf}` : ""],
+    ["Worst bot", worst ? pct(worst.ret) : "–", worst ? `${worst.bot} · ${worst.family}/${worst.tf}` : ""],
+    ["Open positions", last ? last.open : "–", `Closed trades ${trades}`],
+    ["Total equity", money(live.reduce((a, b) => a + (b.equity || 0), 0)), `Start ${money(live.length * 1e4)}`],
+  ];
+  $("#kpis").innerHTML = kp.map(([l, v, d]) => `<div class="card kpi"><div class="l">${l}</div><div class="v">${v}</div><div class="d">${d}</div></div>`).join("");
+
+  // population chart
+  const xr = {min: run.started_ms, max: Math.max(run.end_ms, ser.length ? ser[ser.length - 1].t : 0)};
+  const P = k => ser.map(s => ({x: s.t, y: s[k] / 1e4 - 1}));
+  const o1 = baseOpts(v => pct(v, 3)); Object.assign(o1.scales.x, xr);
+  o1.plugins.tooltip.callbacks = {
+    title: it => `${kst(it[0].parsed.x)} KST (${utc(it[0].parsed.x)} UTC)`,
+    label: it => ` ${it.dataset.label}: ${pct(it.parsed.y, 3)}`,
+  };
+  o1.plugins.tooltip.filter = it => it.dataset.label !== "p10";
+  const s1 = css("--s1");
+  mk("popChart", {type: "line", plugins: [cycleLines, endLabels], options: o1, data: {datasets: [
+    {label: "p90", data: P("p90"), borderWidth: 0, pointRadius: 0, fill: "+1", backgroundColor: css("--band")},
+    {label: "p10", data: P("p10"), borderWidth: 0, pointRadius: 0, fill: false},
+    {label: "Median", data: P("median"), borderColor: s1, borderWidth: 2, pointRadius: 0, pointHoverRadius: 4, endLabel: "Median"},
+    {label: "Mean", data: P("mean"), borderColor: css("--ink2"), borderDash: [4, 3], borderWidth: 1.5, pointRadius: 0, pointHoverRadius: 4, endLabel: "Mean"},
+  ]}});
+
+  // family chart
+  $("#famLegend").innerHTML = FAMS.map(f => `<span><i class="sw" style="background:${famColor(f)}"></i>${f}</span>`).join("");
+  const o2 = baseOpts(v => pct(v, 3)); Object.assign(o2.scales.x, xr);
+  o2.plugins.tooltip.callbacks = {title: o1.plugins.tooltip.callbacks.title, label: it => ` ${it.dataset.label}: ${pct(it.parsed.y, 3)}`};
+  mk("famChart", {type: "line", plugins: [cycleLines, endLabels], options: o2, data: {datasets: FAMS.filter(f => S.fam_series[f]).map(f => ({
+    label: f, endLabel: f, borderColor: famColor(f), backgroundColor: famColor(f), borderWidth: 2, pointRadius: 0, pointHoverRadius: 4,
+    data: ser.map((s, i) => ({x: s.t, y: S.fam_series[f][i] == null ? null : S.fam_series[f][i] / 1e4 - 1})),
+  }))}});
+
+  // histogram of current returns
+  const rets = live.map(b => b.ret || 0);
+  $("#histn").textContent = `(${rets.length} bots)`;
+  if (rets.length) {
+    const lo = Math.min(...rets, -0.0005), hi = Math.max(...rets, 0.0005), nb = 24;
+    const w = (hi - lo) / nb, bins = Array.from({length: nb}, (_, i) => ({a: lo + i * w, b: lo + (i + 1) * w, n: 0}));
+    rets.forEach(r => bins[Math.min(nb - 1, Math.floor((r - lo) / w))].n++);
+    const colr = b => (b.a <= 0 && b.b >= 0) ? css("--mid") : b.b <= 0 ? css("--loss") : css("--gain");
+    const o3 = baseOpts(v => v); o3.layout.padding.right = 8;
+    o3.scales.x = {grid: {display: false}, border: {color: css("--axis")}, ticks: {color: css("--muted"), maxTicksLimit: 7, maxRotation: 0}};
+    o3.interaction = {mode: "nearest", intersect: false, axis: "x"};
+    o3.plugins.tooltip.callbacks = {title: it => { const b = bins[it[0].dataIndex]; return `${pct(b.a, 3)} ~ ${pct(b.b, 3)}`; },
+                                    label: it => ` ${it.parsed.y} bots`};
+    mk("histChart", {type: "bar", options: o3, data: {labels: bins.map(b => pct((b.a + b.b) / 2, 2)),
+      datasets: [{data: bins.map(b => b.n), backgroundColor: bins.map(colr), borderRadius: {topLeft: 4, topRight: 4},
+                  borderSkipped: "bottom", categoryPercentage: 0.92, barPercentage: 1}]}});
+  }
+
+  // family x tf table
+  $("#famtf").innerHTML = `<thead><tr><th class="l">family</th><th class="l">tf</th><th>bots</th><th>mean</th><th>median</th><th>best</th><th>trades</th><th>open</th></tr></thead><tbody>` +
+    S.famtf.map(r => `<tr><td class="l"><i class="dot" style="background:${famColor(r.family)}"></i> ${r.family}</td><td class="l">${r.tf}</td><td>${r.n}</td>
+      <td class="${cls(r.mean)}">${pct(r.mean, 3)}</td><td class="${cls(r.median)}">${pct(r.median, 3)}</td><td class="${cls(r.best)}">${pct(r.best)}</td><td>${r.trades}</td><td>${r.open}</td></tr>`).join("") + "</tbody>";
+
+  // filters
+  const fams = [...new Set(S.bots.map(b => b.family))].sort(), tfs = [...new Set(S.bots.map(b => b.tf))].sort();
+  const keep = (id, opts, all) => { const el = $(id), v = el.value; el.innerHTML = `<option value="">${all}</option>` + opts.map(o => `<option>${o}</option>`).join(""); el.value = v; };
+  keep("#fFam", fams, "All families"); keep("#fTf", tfs, "All timeframes");
+  renderLB();
+
+  // cycles
+  $("#cycles").innerHTML = S.cycles.length ? `<thead><tr><th class="l">cycle</th><th class="l">window (KST)</th><th>bots</th><th>mean</th><th>median</th><th>positive</th><th>trades</th><th class="l">retired</th><th class="l">added</th></tr></thead><tbody>` +
+    S.cycles.map(c => `<tr><td class="l">${c.cycle}</td><td class="l">${hm(c.t0)}–${hm(c.t1)}</td><td>${c.n}</td><td class="${cls(c.mean)}">${pct(c.mean, 3)}</td><td class="${cls(c.median)}">${pct(c.median, 3)}</td>
+      <td>${c.pos}</td><td>${c.trades}</td><td class="l">${Object.entries(c.retired).map(([k, v]) => `${k} ${v}`).join(", ") || "–"}</td><td class="l">${Object.entries(c.added).map(([k, v]) => `${k} ${v}`).join(", ") || "–"}</td></tr>`).join("") + "</tbody>" : "";
+  $("#nocycle").textContent = S.cycles.length ? "" : `No cycle has finished yet. The first cull runs at ${kst(run.started_ms + run.cycle_ms)} KST.`;
+  $("#trials").innerHTML = `<thead><tr><th class="l">spawn round</th><th>candidates</th><th>passed</th><th>rate</th></tr></thead><tbody>` +
+    S.trials.map(t => `<tr><td class="l">${t.cycle === 0 ? "gen 0" : "after cycle " + (t.cycle - 1)}</td><td>${t.tried}</td><td>${t.passed}</td><td>${(t.passed / t.tried * 100).toFixed(1)}%</td></tr>`).join("") + "</tbody>";
+  if (selBot) showBot(selBot, false);
+}
+
+const COLS = [["bot", "bot", "l"], ["family", "family", "l"], ["tf", "tf", "l"], ["gen", "gen"], ["equity", "equity"], ["ret", "return"],
+              ["trades", "trades"], ["open", "open"], ["L", "lifetime L"], ["cycles", "cycles"], ["status", "status", "l"]];
+function renderLB() {
+  const st = $("#fStatus").value, fam = $("#fFam").value, tf = $("#fTf").value, q = $("#fQ").value.toLowerCase();
+  let rows = S.bots.filter(b => (st === "all" || (st === "live" ? b.live : !!b.retired_ms)) && (!fam || b.family === fam) && (!tf || b.tf === tf)
+    && (!q || (b.bot + " " + b.params).toLowerCase().includes(q)));
+  rows.forEach(b => b.status = b.live ? "live" : b.retired_ms ? "retired: " + b.reason : "pending");
+  rows.sort((a, b) => { const x = a[sortKey] ?? -Infinity, y = b[sortKey] ?? -Infinity; return (x < y ? -1 : x > y ? 1 : 0) * sortDir; });
+  $("#lbcount").textContent = `${rows.length} bots`;
+  const arrow = k => k === sortKey ? (sortDir < 0 ? " ▾" : " ▴") : "";
+  $("#lb").innerHTML = `<thead><tr><th>#</th>${COLS.map(([k, l, c]) => `<th class="s ${c || ""}" data-k="${k}">${l}${arrow(k)}</th>`).join("")}</tr></thead><tbody>` +
+    rows.map((b, i) => `<tr class="click ${b.bot === selBot ? "sel" : ""}" data-b="${b.bot}"><td class="muted">${i + 1}</td><td class="l">${b.bot}</td>
+      <td class="l"><i class="dot" style="background:${famColor(b.family)}"></i> ${b.family}</td><td class="l">${b.tf}</td><td>${b.gen}</td>
+      <td>${b.equity != null ? b.equity.toLocaleString("en-US", {minimumFractionDigits: 2, maximumFractionDigits: 2}) : "–"}</td>
+      <td class="${cls(b.ret)}">${pct(b.ret)}</td><td>${b.trades ?? "–"}</td><td>${b.open ?? "–"}</td>
+      <td class="${cls(b.L)}">${b.L != null ? (b.L >= 0 ? "+" : "") + b.L.toFixed(4) : "–"}</td><td>${b.cycles ?? 0}</td><td class="l">${b.status}</td></tr>`).join("") + "</tbody>";
+  document.querySelectorAll("#lb th.s").forEach(th => th.onclick = () => {
+    const k = th.dataset.k; if (k === sortKey) sortDir = -sortDir; else { sortKey = k; sortDir = ["bot", "family", "tf", "status"].includes(k) ? 1 : -1; } renderLB(); });
+  document.querySelectorAll("#lb tr.click").forEach(tr => tr.onclick = () => showBot(tr.dataset.b, true));
+}
+["#fStatus", "#fFam", "#fTf"].forEach(s => $(s).onchange = renderLB); $("#fQ").oninput = renderLB;
+
+async function showBot(id, scroll) {
+  selBot = id; renderLB();
+  const b = S.bots.find(x => x.bot === id); if (!b) return;
+  const d = await (await fetch(`/api/bot?run=${encodeURIComponent(runId)}&id=${encodeURIComponent(id)}`)).json();
+  $("#detail").style.display = "block";
+  $("#dtitle").innerHTML = `${b.bot} · <i class="dot" style="background:${famColor(b.family)}"></i> ${b.family}/${b.tf} · gen ${b.gen}${b.parent ? " (parent " + b.parent + ")" : ""} · ${pct(b.ret)}`;
+  $("#dparams").textContent = b.params;
+  const o = baseOpts(v => "$" + v.toLocaleString("en-US")); Object.assign(o.scales.x, {min: S.run.started_ms, max: S.run.end_ms});
+  o.plugins.tooltip.callbacks = {title: it => `${kst(it[0].parsed.x)} KST`, label: it => ` equity $${it.parsed.y.toFixed(2)} · open ${d[it.dataIndex].open} · trades ${d[it.dataIndex].trades}`};
+  mk("botChart", {type: "line", plugins: [cycleLines], options: o, data: {datasets: [
+    {label: "equity", data: d.map(p => ({x: p.t, y: p.equity})), borderColor: famColor(b.family), borderWidth: 2, pointRadius: 0, pointHoverRadius: 4, stepped: true}]}});
+  if (scroll) $("#detail").scrollIntoView({behavior: "smooth", block: "nearest"});
+}
+
+load(); setInterval(load, 60e3);
+</script>
+</body>
+</html>

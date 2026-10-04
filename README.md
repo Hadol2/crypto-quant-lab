@@ -1,35 +1,43 @@
-# Risk_calc
+# crypto-quant-lab
 
-암호화폐 선물 매매용 **리스크 기반 손절가 계산기** (Streamlit).
-총 자산 대비 감당할 손실 비율을 정하면, 포지션 크기·레버리지·진입가로부터 손절 가격을 계산한다.
+바이낸스 USDT 무기한 선물을 대상으로 한 개인 퀀트 리서치 랩입니다.
+목표는 과최적화 없이 연 50% 수준의 전략을 찾고, 페이퍼 트레이딩을 거쳐 소액 실거래로 넘어가는 것입니다.
 
-```
-손절폭 = (총자산 × 리스크 비율) / (포지션 수량 × 레버리지)
-LONG  손절가 = 진입가 − 손절폭
-SHORT 손절가 = 진입가 + 손절폭
-```
+이 레포에는 **개발 방식과 공개 가능한 인프라**만 올라가 있습니다. 실제 운용 전략 코드, 데이터, 결과 원장, 서버 정보는 비공개입니다.
 
-> **상태: 개발 중단 (2025).** 이후 리스크 관리·전략 연구는 별도의 비공개 트레이딩 리서치 프로젝트에서 이어가고 있다.
+## 구성
 
-## 앱 구성
-
-| 파일 | 설명 |
+| 경로 | 내용 |
 |---|---|
-| `app.py` | 실거래용. Binance 선물 열린 포지션을 불러와 손절가 계산 (`BINANCE_API_KEY/SECRET` 필요) |
-| `app_manual.py` | 수동 입력 버전 (API 키 불필요) |
-| `paper_trade_app.py` | 가상매매(paper trading): 계약 저장·청산·손익 기록 |
-| `public_dashboard.py` | `risk_log.csv` 기반 수익률 대시보드 |
-| `paper_dashboard.py` | GitHub에 백업된 가상매매 기록 분석 (Streamlit secrets 필요) |
-| `calculator.py` | 손절가 계산 로직 |
-| `asset_manager.py`, `logger.py` | 자산 잔고(JSON)·매매 로그(CSV) 관리 |
-| `binance_client.py`, `github_uploader.py` | Binance API / GitHub 백업 연동 |
+| `arena/` | 전략 아레나: 교과서형 전략 계열(돌파, EMA, 평균회귀, 모멘텀)을 무작위 생성·변이시켜 실시간 데이터로 경쟁시키는 엔진과 웹 대시보드 |
+| `results/ledger.py` | 결과 원장: 모든 실험·백테스트·페이퍼 결과를 한 줄씩 기록하고, 여러 호스트의 원장을 병합해 Obsidian 노트로 렌더링 |
+| `automation/regime_monitor/` | 시장 국면(GO/PAUSE/STOP) 모니터링 봇, Notion에 기록 |
+
+## 개발 방식
+
+과최적화를 막기 위해 다음 규칙을 지킵니다.
+
+- **사전 등록**: 실험마다 가설, 설정 개수, 통과 기준을 코드 실행 전에 문서로 먼저 적습니다.
+- **시행 횟수 누적**: 시도한 모든 설정을 시행(trial)으로 세고 누적합니다. 통과 기준은 누적 시행 수를 감안해 해석합니다.
+- **홀드아웃 1회 개봉**: 최근 구간은 손대지 않고 남겨뒀다가, 최종 후보를 고정한 뒤 단 한 번만 엽니다. 개봉 후에는 그 구간으로 튜닝하지 않습니다.
+- **모든 결과는 원장에**: 실패한 실험도 빠짐없이 `results/ledger.jsonl`에 남깁니다.
+- **보수적 비용 모델**: 메이커/테이커 수수료, 유동성 순위별 슬리피지, 제곱근 시장충격까지 반영합니다.
+- **포워드 검증**: 홀드아웃을 통과한 전략도 실시간 페이퍼 트레이딩(포스트온리 주문, 1분봉 체결 시뮬레이션)으로 30일·90일 게이트를 넘어야 실거래로 갑니다.
+
+## 인프라
+
+- **Mac**: 개발과 결과 취합
+- **데스크탑(WSL)**: 무거운 백테스트와 연구 연산
+- **클라우드 서버**: 아레나·페이퍼 트레이더 상시 실행(systemd 타이머)
+
+각 호스트는 자기 원장을 따로 쓰고, Mac이 이를 가져와 병합합니다. 병합본은 다른 호스트로 다시 보내지 않습니다.
 
 ## 실행
 
 ```sh
 pip install -r requirements.txt
-streamlit run app_manual.py      # 키 없이 바로 실행
+python3 -m arena.dashboard --host 127.0.0.1 --port 8080   # 아레나 대시보드
+python3 -m unittest arena.tests.test_engine                # 엔진 테스트
 ```
 
-실거래 버전은 `.env`에 `BINANCE_API_KEY`, `BINANCE_API_SECRET`을 넣고 `streamlit run app.py`.
-`paper_dashboard.py`·GitHub 백업 기능은 `.streamlit/secrets.toml`에 `GITHUB_TOKEN`, `GITHUB_USERNAME`, `GITHUB_REPO`, `GITHUB_BRANCH`, `TARGET_FILE`(업로더는 `GITHUB_FILE_PATH`)이 필요하다 (현재 미운영).
+API 키는 파일에 저장하지 않고 환경변수로만 받습니다. 거래 키는 출금 권한을 끈 상태로 씁니다.
