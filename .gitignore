@@ -4,6 +4,8 @@
 # 로컬 자산 및 로그 파일
 total_asset.json
 risk_log.csv
+paper_trade_log.csv
+saved_positions.json
 
 # Python 일반 무시 항목
 __pycache__/
@@ -13,3 +15,7 @@ __pycache__/
 .Python
 env/
 venv/
+
+# Streamlit secrets
+.streamlit/secrets.toml
+.DS_Store
